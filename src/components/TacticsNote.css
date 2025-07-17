@@ -1,0 +1,56 @@
+/* src/components/TacticsNote.css */
+
+/* トグルスイッチのスタイル */
+.kill-combo-toggle-checkbox {
+  display: none;
+}
+
+.kill-combo-toggle-label {
+  width: 52px;
+  height: 28px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  cursor: pointer;
+  display: inline-block;
+  position: relative;
+  transition: background-color 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.kill-combo-toggle-label::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+  transition: transform 0.3s ease;
+}
+
+.kill-combo-toggle-checkbox:checked + .kill-combo-toggle-label {
+  background-color: #ef4444; /* 赤色 */
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.7);
+}
+
+.kill-combo-toggle-checkbox:checked + .kill-combo-toggle-label::after {
+  transform: translateX(24px);
+  background-color: white;
+}
+
+/* スクロールバーのスタイル */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
