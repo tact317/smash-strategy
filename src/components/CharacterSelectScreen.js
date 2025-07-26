@@ -8,6 +8,8 @@ import ColorThief from 'colorthief';
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useGamepad } from '../contexts/GamepadContext';
+import { useFocusable } from '../hooks/useFocusable';
 
 const EditCharacterModal = ({ character, onSave, onCancel }) => {
     const [name, setName] = useState(character.name);
@@ -32,9 +34,18 @@ const EditCharacterModal = ({ character, onSave, onCancel }) => {
 const SortableCharacter = ({ character, onSelect, onDelete, onEdit }) => {
     const { setCursorVariant } = useUI();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: character.id });
+    const { focusedId } = useGamepad();
+    const focusableRef = useFocusable(character.id);
+    const isFocused = focusedId === character.id;
+
+    const combinedRef = (node) => {
+        setNodeRef(node);
+        focusableRef.current = node;
+    };
+
     const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, };
     return (
-        <motion.div ref={setNodeRef} style={style} {...attributes} {...listeners} className="group cursor-grab aspect-square relative touch-none" variants={{ hidden: { opacity: 0, scale: 0.8 }, visible: { opacity: 1, scale: 1 } }} exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.3 } }} onMouseEnter={() => setCursorVariant('hover')} onMouseLeave={() => setCursorVariant('default')} whileTap={{ cursor: 'grabbing' }}>
+        <motion.div ref={combinedRef} style={style} {...attributes} {...listeners} className={`group cursor-grab aspect-square relative touch-none rounded-lg transition-all duration-200 ${isFocused ? 'ring-4 ring-white ring-offset-2 ring-offset-slate-900' : ''}`} variants={{ hidden: { opacity: 0, scale: 0.8 }, visible: { opacity: 1, scale: 1 } }} exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.3 } }} onMouseEnter={() => setCursorVariant('hover')} onMouseLeave={() => setCursorVariant('default')} whileTap={{ cursor: 'grabbing' }}>
             <div onClick={() => onSelect(character)} className="w-full h-full rounded-lg flex flex-col items-center justify-end text-white font-bold shadow-lg group-hover:shadow-2xl border-2 border-transparent group-hover:border-white/80 transition-all duration-300 transform group-hover:scale-105 p-2 bg-no-repeat bg-cover bg-center cursor-pointer" style={{ backgroundImage: `linear-gradient(to top, ${character.color}A0 20%, transparent 70%), url(${character.icon ? `/images/${encodeURIComponent(character.icon)}` : ''})`, backgroundColor: '#222' }}>
                 <span className="text-center text-sm shadow-black [text-shadow:_0_1px_2px_var(--tw-shadow-color)]">{character.name}</span>
             </div>
@@ -73,6 +84,7 @@ const CharacterSelectScreen = ({ onSelect, onBack }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState(null);
+  const { focusedId, setFocusedId, focusableElements } = useGamepad();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const handleDragEnd = (event) => { const { active, over } = event; if (active.id !== over.id) { const oldIndex = characters.findIndex(c => c.id === active.id); const newIndex = characters.findIndex(c => c.id === over.id); setCharacters(arrayMove(characters, oldIndex, newIndex)); } };
@@ -93,6 +105,30 @@ const CharacterSelectScreen = ({ onSelect, onBack }) => {
         handleDeleteCharacter(characterId);
     }
   };
+
+  useEffect(() => {
+    const handleGamepadAction = (e) => {
+      if (e.detail.action === 'confirm' && focusedId) {
+        const character = characters.find(c => c.id === focusedId);
+        if (character) {
+          onSelect(character);
+        }
+      } else if (e.detail.action === 'cancel') {
+        onBack();
+      }
+    };
+
+    if (!focusedId && characters.length > 0 && focusableElements.size > 0) {
+      const firstFocusableId = Array.from(focusableElements.keys())[0];
+      const characterExists = characters.some(c => c.id === firstFocusableId);
+      if (characterExists) {
+        setFocusedId(firstFocusableId);
+      }
+    }
+
+    window.addEventListener('gamepadactiondown', handleGamepadAction);
+    return () => window.removeEventListener('gamepadactiondown', handleGamepadAction);
+  }, [focusedId, setFocusedId, characters, onSelect, onBack, focusableElements]);
 
   return (
     <div className="w-screen h-screen bg-slate-900 flex flex-col text-white">

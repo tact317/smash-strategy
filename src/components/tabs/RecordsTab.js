@@ -4,7 +4,7 @@ import { Plus, Trash2, Trophy } from 'lucide-react';
 import { useData } from '../../contexts/DataContext';
 
 const RecordsTab = ({ characterData, updateCharacterData, characterId }) => {
-    const { characters, addMatchRecord, deleteMatchRecord } = useData();
+    const { characters } = useData();
     const [opponent, setOpponent] = useState(characters[0]?.name || '');
 
     const records = useMemo(() => {
@@ -21,7 +21,18 @@ const RecordsTab = ({ characterData, updateCharacterData, characterId }) => {
             alert('対戦相手を選択してください。');
             return;
         }
-        addMatchRecord(characterId, opponent, result);
+        const newMatch = {
+            id: `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            opponent,
+            result,
+        };
+        const updatedMatches = [...(records.matches || []), newMatch];
+        updateCharacterData(['records', 'matches'], updatedMatches);
+    };
+
+    const handleDeleteMatch = (matchId) => {
+        const updatedMatches = records.matches.filter(m => m.id !== matchId);
+        updateCharacterData(['records', 'matches'], updatedMatches);
     };
 
     return (
@@ -30,7 +41,7 @@ const RecordsTab = ({ characterData, updateCharacterData, characterId }) => {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-black/20 p-4 rounded-lg flex flex-col sm:flex-row items-center gap-4">
                 <div className="flex-grow w-full">
                     <label htmlFor="opponent-select" className="block text-sm font-medium text-white/70 mb-1">対戦相手</label>
-                    <select id="opponent-select" value={opponent} onChange={e => setOpponent(e.target.value)} className="w-full bg-slate-700 p-3 rounded-md">
+                    <select id="opponent-select" value={opponent} onChange={e => setOpponent(e.target.value)} className="w-full bg-slate-700 p-3 rounded-md border border-transparent focus:border-blue-500 focus:ring-blue-500">
                         {characters.map(char => <option key={char.id} value={char.name}>{char.name}</option>)}
                     </select>
                 </div>
@@ -58,7 +69,7 @@ const RecordsTab = ({ characterData, updateCharacterData, characterId }) => {
                                 <span className="text-white/80 mx-2">vs</span>
                                 <span>{match.opponent}</span>
                             </div>
-                            <button onClick={() => deleteMatchRecord(characterId, match.id)} className="text-white/30 hover:text-red-500"><Trash2 size={16}/></button>
+                            <button onClick={() => handleDeleteMatch(match.id)} className="text-white/30 hover:text-red-500"><Trash2 size={16}/></button>
                         </div>
                     ))}
                 </div>

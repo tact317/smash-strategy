@@ -145,9 +145,39 @@ export const DataProvider = ({ children }) => {
         }
     };
     
-    const shareTierList = async (tierListData) => { try { const docRef = await addDoc(collection(db, "sharedTierLists"), { ...tierListData, createdAt: new Date() }); return docRef.id; } catch (e) { console.error("Error adding document: ", e); alert("共有に失敗しました。"); return null; } };
-    const addMatchRecord = (characterId, opponentName, result) => { setCharacterData(prev => { const newMatch = { id: Date.now(), opponent: opponentName, result }; const currentCharacter = prev[characterId]; return { ...prev, [characterId]: { ...currentCharacter, records: { ...currentCharacter.records, matches: [newMatch, ...(currentCharacter.records.matches || [])] } } }; }); };
-    const deleteMatchRecord = (characterId, matchId) => { setCharacterData(prev => { const currentCharacter = prev[characterId]; return { ...prev, [characterId]: { ...currentCharacter, records: { ...currentCharacter.records, matches: (currentCharacter.records.matches || []).filter(m => m.id !== matchId) } } }; }); };
+    const shareTierList = async (tierListData) => {
+        try {
+            const docRef = await addDoc(collection(db, "sharedTierLists"), { ...tierListData, createdAt: new Date() });
+            return docRef.id;
+        } catch (e) {
+            console.error("Error adding document: ", e);
+            alert("共有に失敗しました。");
+            return null;
+        }
+    };
+    const addMatchRecord = (characterId, opponentName, result) => {
+        setCharacterData(prev => {
+            const newMatch = { id: Date.now(), opponent: opponentName, result };
+            const currentCharacter = prev[characterId] || {};
+            const currentRecords = currentCharacter.records || {};
+            const currentMatches = currentRecords.matches || [];
+
+            return {
+                ...prev,
+                [characterId]: {
+                    ...currentCharacter,
+                    records: { ...currentRecords, matches: [newMatch, ...currentMatches] }
+                }
+            };
+        });
+    };
+    const deleteMatchRecord = (characterId, matchId) => {
+        setCharacterData(prev => {
+            const currentCharacter = prev[characterId];
+            const updatedMatches = (currentCharacter?.records?.matches || []).filter(m => m.id !== matchId);
+            return { ...prev, [characterId]: { ...currentCharacter, records: { ...currentCharacter.records, matches: updatedMatches } } };
+        });
+    };
     const handleAddMultipleCharacters = (newCharInfos) => { const time = Date.now(); const existingNames = new Set(characters.map(c => c.name)); const trulyNewCharacters = newCharInfos.filter(info => !existingNames.has(info.name)).map((info, index) => ({ ...info, id: `${time}-${index}` })); if (trulyNewCharacters.length > 0) { setCharacters(prev => [...prev, ...trulyNewCharacters]); } };
     const handleDeleteCharacter = (characterId) => { setCharacters(prev => prev.filter(c => c.id !== characterId)); setCharacterData(prev => { const newData = {...prev}; delete newData[characterId]; return newData; }); setTierLists(prevLists => prevLists.map(list => { const newPlacements = { ...list.characterPlacements }; Object.keys(newPlacements).forEach(tier => { newPlacements[tier] = newPlacements[tier].filter(id => id !== characterId); }); return { ...list, characterPlacements: newPlacements }; })); };
     const handleAddCommand = (newCommandInfo) => { setCommands(prev => [...prev, { ...newCommandInfo, id: Date.now() }]); };

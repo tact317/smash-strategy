@@ -8,6 +8,7 @@ import { useAudioSettings } from '../contexts/AudioSettingsContext';
 import { useModal } from '../contexts/ModalContext';
 import { collectionItems } from '../data/collection';
 import { useBackupSystem } from '../hooks/useBackupSystem';
+import ControllerSettings from './ControllerSettings';
 
 const CommandBuilder = ({ command, setCommand }) => {
     const currentCommand = Array.isArray(command) ? command : [];
@@ -210,6 +211,7 @@ const SettingsPage = ({ onNavigate, onClose, commandCategories }) => {
                         <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.1}}><StartGgSettings /></motion.div>
                         <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.15}}><BackupSettings /></motion.div>
                         <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.2}}><SoundSettings /></motion.div>
+                        <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.3}}><ControllerSettings /></motion.div>
                         <motion.section initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.25}} className="bg-white/5 p-6 rounded-lg">
                             <h2 className="text-2xl font-semibold mb-4">ゲリラクイズ設定</h2>
                             <div className="space-y-4">

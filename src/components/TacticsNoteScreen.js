@@ -1,10 +1,12 @@
 // src/components/TacticsNoteScreen.js (全文)
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, Zap, Target, Users, Shield, Sword, Clock, Gamepad2, BarChart3, Video, CheckSquare } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useUI } from '../contexts/UIContext';
+import { useGamepad } from '../contexts/GamepadContext';
+import { useFocusable } from '../hooks/useFocusable';
 import './TacticsNote.css';
 
 // タブコンポーネントを外部ファイルからインポート
@@ -18,44 +20,91 @@ import StageStrategiesTab from './tabs/StageStrategiesTab';
 import VideoLinksTab from './tabs/VideoLinksTab';
 import PracticeListTab from './tabs/PracticeListTab';
 
+const tabs = [
+    { id: 'combos', label: 'コンボ', icon: Zap },
+    { id: 'gameplan', label: '立ち回り', icon: Target },
+    { id: 'matchups', label: 'キャラ対策', icon: Users },
+    { id: 'recovery', label: '復帰・阻止', icon: Shield },
+    { id: 'frameData', label: 'フレーム', icon: Clock },
+    { id: 'stageStrategies', label: 'ステージ', icon: Gamepad2 },
+    { id: 'records', label: '戦績', icon: BarChart3 },
+    { id: 'videos', label: '動画', icon: Video },
+    { id: 'practice', label: '練習メモ', icon: CheckSquare },
+];
 
-const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab, color }) => (
-    <button onClick={() => setActiveTab(id)} className="relative px-4 py-3 text-lg font-semibold text-white/70 transition-colors hover:text-white whitespace-nowrap">
-      <div className="flex items-center gap-3"><Icon size={20} /><span>{label}</span></div>
-      {activeTab === id && (
-        <motion.div layoutId="active-tab-indicator" className="absolute bottom-0 left-0 right-0 h-1 rounded-t-full" style={{ background: `linear-gradient(to right, ${color}80, ${color})` }} />
-      )}
-    </button>
-);
+const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab, color }) => {
+    const { focusedId } = useGamepad();
+    const ref = useFocusable(id);
+    const isFocused = focusedId === id;
+    const isActive = activeTab === id;
+
+    return (
+        <button
+            ref={ref}
+            onClick={() => setActiveTab(id)}
+            className={`relative px-4 py-3 text-lg font-semibold transition-colors whitespace-nowrap ${isActive ? 'text-white' : 'text-white/70 hover:text-white'} ${isFocused && !isActive ? 'bg-white/10 rounded-t-md' : ''}`}
+        >
+            <div className="flex items-center gap-3"><Icon size={20} /><span>{label}</span></div>
+            {isActive && (
+                <motion.div
+                    layoutId="active-tab-indicator"
+                    className="absolute bottom-0 left-0 right-0 h-1 rounded-t-full"
+                    style={{ background: `linear-gradient(to right, ${color}80, ${color})` }}
+                />
+            )}
+        </button>
+    );
+};
 
 const TacticsNoteScreen = ({ character, onBack }) => {
   const { characterData, setCharacterData } = useData();
   const { setCursorVariant } = useUI();
   const [activeTab, setActiveTab] = useState('combos');
+  const { focusedId, focusableElements } = useGamepad();
+
+  // フォーカスされた要素が画面内に表示されるようにスクロールする
+  useEffect(() => {
+    if (focusedId) {
+      const element = focusableElements.get(focusedId);
+      if (element) {
+        element.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'nearest'
+        });
+      }
+    }
+  }, [focusedId, focusableElements]);
 
   const updateCharacterDataFor = useCallback((path, value) => {
     if (!character?.id) return;
+
     setCharacterData(prev => {
-        const newData = JSON.parse(JSON.stringify(prev));
-        let current = newData[character.id];
-        if (!current) return prev;
-        for (let i = 0; i < path.length - 1; i++) {
-            if (current[path[i]] === undefined || current[path[i]] === null) {
-                current[path[i]] = {};
-            }
-            current = current[path[i]];
+      const recursiveUpdate = (currentLevel, remainingPath) => {
+        const [head, ...tail] = remainingPath;
+        const newLevel = { ...(currentLevel || {}) };
+
+        if (tail.length === 0) {
+          newLevel[head] = value;
+        } else {
+          newLevel[head] = recursiveUpdate(newLevel[head], tail);
         }
-        current[path[path.length - 1]] = value;
-        return newData;
+        return newLevel;
+      };
+
+      const updatedCharacterData = recursiveUpdate(prev[character.id], path);
+
+      return {
+        ...prev,
+        [character.id]: updatedCharacterData,
+      };
     });
   }, [character?.id, setCharacterData]);
-
   
   if (!character || !characterData) return <div className="flex items-center justify-center h-screen text-white">データがありません。</div>;
   
   const currentCharacterData = characterData[character.id];
   if (!currentCharacterData) return <div className="flex items-center justify-center h-screen text-white">キャラクターデータを読み込んでいます...</div>;
-
 
   const renderContent = () => {
     const props = { characterData: currentCharacterData, updateCharacterData: updateCharacterDataFor, characterId: character.id };
@@ -96,15 +145,17 @@ const TacticsNoteScreen = ({ character, onBack }) => {
 
       <nav className="flex-shrink-0 bg-black/20 border-b border-white/10 overflow-x-auto custom-scrollbar">
         <div className="container mx-auto px-6 flex items-center gap-2">
-            <TabButton id="combos" label="コンボ" icon={Zap} activeTab={activeTab} setActiveTab={setActiveTab} color={character.color} />
-            <TabButton id="gameplan" label="立ち回り" icon={Target} activeTab={activeTab} setActiveTab={setActiveTab} color={character.color} />
-            <TabButton id="matchups" label="キャラ対策" icon={Users} activeTab={activeTab} setActiveTab={setActiveTab} color={character.color} />
-            <TabButton id="recovery" label="復帰・阻止" icon={Shield} activeTab={activeTab} setActiveTab={setActiveTab} color={character.color} />
-            <TabButton id="frameData" label="フレーム" icon={Clock} activeTab={activeTab} setActiveTab={setActiveTab} color={character.color} />
-            <TabButton id="stageStrategies" label="ステージ" icon={Gamepad2} activeTab={activeTab} setActiveTab={setActiveTab} color={character.color} />
-            <TabButton id="records" label="戦績" icon={BarChart3} activeTab={activeTab} setActiveTab={setActiveTab} color={character.color} />
-            <TabButton id="videos" label="動画" icon={Video} activeTab={activeTab} setActiveTab={setActiveTab} color={character.color} />
-            <TabButton id="practice" label="練習メモ" icon={CheckSquare} activeTab={activeTab} setActiveTab={setActiveTab} color={character.color} />
+          {tabs.map(tab => (
+            <TabButton
+              key={tab.id}
+              id={tab.id}
+              label={tab.label}
+              icon={tab.icon}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              color={character.color}
+            />
+          ))}
         </div>
       </nav>
 

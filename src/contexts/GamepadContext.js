@@ -1,65 +1,81 @@
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { useSettings } from './SettingsContext';
 
 const GamepadContext = createContext();
+
 export const useGamepad = () => useContext(GamepadContext);
 
+const AXIS_THRESHOLD = 0.75;
+const AXIS_MOVE_DELAY = 180; // ms
+
 export const GamepadProvider = ({ children }) => {
-    const focusableElements = useRef(new Map());
+    const { settings } = useSettings();
+    const [gamepads, setGamepads] = useState({});
     const [focusedId, setFocusedId] = useState(null);
-    const animationFrameId = useRef();
-    const lastInputTime = useRef(0);
-    const buttonState = useRef(new Array(16).fill(false));
-    const activeGamepadIndex = useRef(null);
+    const focusableElements = useRef(new Map()).current;
+    const animationFrameId = useRef(null);
+    const lastAxisMoveTime = useRef(0);
+    const prevButtonStates = useRef({});
 
     const registerFocusable = useCallback((id, element) => {
-        console.log(`Registering focusable element: ${id}`);
-        focusableElements.current.set(id, { element });
-        if (!focusedId) {
-            console.log(`Setting initial focus to: ${id}`);
-            setFocusedId(id);
-        }
-    }, [focusedId]);
+        focusableElements.set(id, element);
+    }, [focusableElements]);
 
     const unregisterFocusable = useCallback((id) => {
-        console.log(`Unregistering focusable element: ${id}`);
-        focusableElements.current.delete(id);
-        if (focusedId === id) {
-            const nextElement = focusableElements.current.keys().next().value;
-            setFocusedId(nextElement || null);
+        focusableElements.delete(id);
+    }, [focusableElements]);
+
+    const handleGamepadConnected = (e) => {
+        console.log('Gamepad connected:', e.gamepad.id);
+        setGamepads(prev => ({ ...prev, [e.gamepad.index]: e.gamepad }));
+    };
+
+    const handleGamepadDisconnected = (e) => {
+        console.log('Gamepad disconnected:', e.gamepad.id);
+        setGamepads(prev => {
+            const newState = { ...prev };
+            delete newState[e.gamepad.index];
+            return newState;
+        });
+    };
+
+    const handleAxisMove = useCallback((e) => {
+        const { direction } = e.detail;
+        const elements = Array.from(focusableElements.entries());
+        if (elements.length === 0) return;
+
+        if (!focusedId) {
+            setFocusedId(elements[0][0]);
+            return;
         }
-    }, [focusedId]);
 
-    const findNextFocus = useCallback((axisX, axisY) => {
-        if (!focusedId || focusableElements.current.size < 2) return;
-        const currentElement = focusableElements.current.get(focusedId)?.element;
-        if (!currentElement) return;
+        const currentIndex = elements.findIndex(([id]) => id === focusedId);
+        if (currentIndex === -1) {
+            setFocusedId(elements[0][0]);
+            return;
+        };
 
+        const currentElement = elements[currentIndex][1];
         const currentRect = currentElement.getBoundingClientRect();
+
         let bestCandidate = null;
         let minDistance = Infinity;
-        let direction = '';
-        if (Math.abs(axisX) > Math.abs(axisY)) { direction = axisX > 0 ? 'right' : 'left'; } 
-        else { direction = axisY > 0 ? 'down' : 'up'; }
-        
-        console.log(`Finding next focus in direction: ${direction}`);
 
-        focusableElements.current.forEach((item, id) => {
+        elements.forEach(([id, element]) => {
             if (id === focusedId) return;
-            const targetRect = item.element.getBoundingClientRect();
-            const dx = (targetRect.left + targetRect.width / 2) - (currentRect.left + currentRect.width / 2);
-            const dy = (targetRect.top + targetRect.height / 2) - (currentRect.top + currentRect.height / 2);
 
-            let isDirectionMatch = false;
-            switch(direction) {
-                case 'right': isDirectionMatch = dx > 0 && Math.abs(dx) > Math.abs(dy); break;
-                case 'left':  isDirectionMatch = dx < 0 && Math.abs(dx) > Math.abs(dy); break;
-                case 'down':  isDirectionMatch = dy > 0 && Math.abs(dy) > Math.abs(dx); break;
-                case 'up':    isDirectionMatch = dy < 0 && Math.abs(dy) > Math.abs(dx); break;
-                default: break;
-            }
+            const rect = element.getBoundingClientRect();
+            const dx = (rect.left + rect.right) / 2 - (currentRect.left + currentRect.right) / 2;
+            const dy = (rect.top + rect.bottom) / 2 - (currentRect.top + currentRect.bottom) / 2;
 
-            if (isDirectionMatch) {
-                const distance = Math.hypot(dx, dy);
+            let isValidMove = false;
+            if (direction === 'right' && dx > 0 && Math.abs(dx) > Math.abs(dy) * 0.5) isValidMove = true;
+            if (direction === 'left' && dx < 0 && Math.abs(dx) > Math.abs(dy) * 0.5) isValidMove = true;
+            if (direction === 'down' && dy > 0 && Math.abs(dy) > Math.abs(dx) * 0.5) isValidMove = true;
+            if (direction === 'up' && dy < 0 && Math.abs(dy) > Math.abs(dx) * 0.5) isValidMove = true;
+
+            if (isValidMove) {
+                const distance = Math.sqrt(dx * dx + dy * dy);
                 if (distance < minDistance) {
                     minDistance = distance;
                     bestCandidate = id;
@@ -68,76 +84,95 @@ export const GamepadProvider = ({ children }) => {
         });
 
         if (bestCandidate) {
-            console.log(`Focus changed from ${focusedId} to ${bestCandidate}`);
             setFocusedId(bestCandidate);
         }
-    }, [focusedId]);
+    }, [focusableElements, focusedId]);
 
-    const gameLoop = useCallback(() => {
-        if (activeGamepadIndex.current === null) {
-            // スキャンを継続するためにループは止めない
-            animationFrameId.current = requestAnimationFrame(gameLoop);
-            return;
-        }
-        const gp = navigator.getGamepads()[activeGamepadIndex.current];
-        if (!gp) {
-            animationFrameId.current = requestAnimationFrame(gameLoop);
-            return;
-        }
-        
+    const runGamepadLoop = useCallback(() => {
+        const connectedGamepads = navigator.getGamepads ? navigator.getGamepads() : [];
         const now = performance.now();
-        const AXIS_THRESHOLD = 0.7;
-        const INPUT_DELAY = 150;
 
-        if (now - lastInputTime.current > INPUT_DELAY) {
-            const [axisX, axisY] = [gp.axes[0] || 0, gp.axes[1] || 0];
-            if (Math.hypot(axisX, axisY) > AXIS_THRESHOLD) {
-                findNextFocus(axisX, axisY);
-                lastInputTime.current = now;
+        for (const gamepad of connectedGamepads) {
+            if (!gamepad) continue;
+
+            // --- Button Press Handling ---
+            const currentButtonStates = gamepad.buttons.map(b => b.pressed);
+            const prevStates = prevButtonStates.current[gamepad.index] || [];
+            
+            currentButtonStates.forEach((isPressed, buttonIndex) => {
+                const wasPressed = prevStates[buttonIndex];
+                if (isPressed && !wasPressed) {
+                    const action = Object.keys(settings.keymap).find(key => settings.keymap[key] === buttonIndex);
+                    const detail = { buttonIndex, gamepad, action: action || null };
+
+                    // [デバッグログ] ボタンが押されたとき
+                    console.log(`%c[GP ${gamepad.index}] Button Down:`, 'color: #88FF88; font-weight: bold;', { button: buttonIndex, action: action || 'N/A' });
+
+                    window.dispatchEvent(new CustomEvent('gamepadbuttondown', { detail }));
+                    if (action) {
+                        window.dispatchEvent(new CustomEvent('gamepadactiondown', { detail }));
+                    }
+                } else if (!isPressed && wasPressed) {
+                    // [デバッグログ] ボタンが離されたとき
+                    console.log(`%c[GP ${gamepad.index}] Button Up:`, 'color: #FF8888; font-weight: bold;', { button: buttonIndex });
+
+                    window.dispatchEvent(new CustomEvent('gamepadbuttonup', { detail: { buttonIndex, gamepad } }));
+                }
+            });
+            prevButtonStates.current[gamepad.index] = currentButtonStates;
+
+            // --- Axis (D-pad / Stick) Move Handling ---
+            if (now - lastAxisMoveTime.current > AXIS_MOVE_DELAY) {
+                const axes = [gamepad.axes[0], gamepad.axes[1]]; // Left stick
+                if (gamepad.buttons.length > 15) { // D-pad
+                    axes[0] = (gamepad.buttons[15].pressed ? 1 : 0) - (gamepad.buttons[14].pressed ? 1 : 0);
+                    axes[1] = (gamepad.buttons[13].pressed ? 1 : 0) - (gamepad.buttons[12].pressed ? 1 : 0);
+                }
+
+                let direction = null;
+                if (axes[1] < -AXIS_THRESHOLD) direction = 'up';
+                else if (axes[1] > AXIS_THRESHOLD) direction = 'down';
+                else if (axes[0] < -AXIS_THRESHOLD) direction = 'left';
+                else if (axes[0] > AXIS_THRESHOLD) direction = 'right';
+
+                if (direction) {
+                    lastAxisMoveTime.current = now;
+
+                    // [デバッグログ] スティック/D-Padが入力されたとき
+                    console.log(`%c[GP ${gamepad.index}] Axis Move:`, 'color: #8888FF; font-weight: bold;', { direction });
+
+                    window.dispatchEvent(new CustomEvent('gamepadaxismove', { detail: { direction, gamepad } }));
+                }
             }
         }
-        
-        gp.buttons.forEach((button, index) => {
-            const wasPressed = buttonState.current[index];
-            if (button.pressed && !wasPressed) {
-                console.log(`Button ${index} pressed`);
-                window.dispatchEvent(new CustomEvent('gamepadbuttondown', { detail: { buttonIndex: index } }));
-            }
-            buttonState.current[index] = button.pressed;
-        });
-        animationFrameId.current = requestAnimationFrame(gameLoop);
-    }, [findNextFocus]);
+        animationFrameId.current = requestAnimationFrame(runGamepadLoop);
+    }, [settings.keymap]);
 
     useEffect(() => {
-        const handleGamepadConnected = (e) => {
-            console.log(`Gamepad connected: ${e.gamepad.id}`);
-            if (activeGamepadIndex.current === null) {
-                activeGamepadIndex.current = e.gamepad.index;
-            }
-        };
-        const handleGamepadDisconnected = (e) => {
-            console.log(`Gamepad disconnected: ${e.gamepad.id}`);
-            if (activeGamepadIndex.current === e.gamepad.index) {
-                activeGamepadIndex.current = null;
-            }
-        };
+        window.addEventListener('gamepadconnected', handleGamepadConnected);
+        window.addEventListener('gamepaddisconnected', handleGamepadDisconnected);
+        window.addEventListener('gamepadaxismove', handleAxisMove);
 
-        window.addEventListener("gamepadconnected", handleGamepadConnected);
-        window.addEventListener("gamepaddisconnected", handleGamepadDisconnected);
-        
-        // 常にループを開始
-        animationFrameId.current = requestAnimationFrame(gameLoop);
+        animationFrameId.current = requestAnimationFrame(runGamepadLoop);
 
         return () => {
-            window.removeEventListener("gamepadconnected", handleGamepadConnected);
-            window.removeEventListener("gamepaddisconnected", handleGamepadDisconnected);
+            window.removeEventListener('gamepadconnected', handleGamepadConnected);
+            window.removeEventListener('gamepaddisconnected', handleGamepadDisconnected);
+            window.removeEventListener('gamepadaxismove', handleAxisMove);
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
             }
         };
-    }, [gameLoop]);
+    }, [runGamepadLoop, handleAxisMove]);
 
-    const value = { focusedId, registerFocusable, unregisterFocusable };
+    const value = {
+        gamepads,
+        focusedId,
+        setFocusedId,
+        registerFocusable,
+        unregisterFocusable,
+        focusableElements,
+    };
 
     return (
         <GamepadContext.Provider value={value}>

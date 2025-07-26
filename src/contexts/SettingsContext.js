@@ -5,15 +5,25 @@ const SettingsContext = createContext();
 
 export const useSettings = () => useContext(SettingsContext);
 
+export const defaultKeymap = {
+  confirm: 0, // A or Cross
+  cancel: 1,  // B or Circle
+  menu: 3,    // Y or Triangle
+  special: 2, // X or Square
+};
+
 export const SettingsProvider = ({ children }) => {
-  const [settings, setSettings] = useState(() => loadFromLocalStorage('smashAppSettings', {
-    // 既存の設定
+  const [settings, setSettings] = useState(() => {
+    const defaultSettings = {
     isGuerillaEnabled: true,
     guerillaFrequency: 180000,
-    // ★★★ ここから下を追記 ★★★
     startggToken: '', // APIトークン
     startggUserSlug: '', // ユーザースラッグ
-  }));
+    keymap: defaultKeymap, // コントローラー設定
+    };
+    const savedSettings = loadFromLocalStorage('smashAppSettings', {});
+    return { ...defaultSettings, ...savedSettings };
+  });
 
   useEffect(() => {
     saveToLocalStorage('smashAppSettings', settings);

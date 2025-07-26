@@ -4,8 +4,8 @@ import { Sword, List, Gamepad2, Users, Shield, Settings, Sun, Moon } from 'lucid
 import { useUI } from '../contexts/UIContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAudioSettings } from '../contexts/AudioSettingsContext';
-import { collectionItems } from '../data/collection';
-import { useGamepad } from '../contexts/GamepadContext';
+import { collectionItems } from '../data/collection'; // 既存のデータはそのまま利用
+import { useGamepad } from '../contexts/GamepadContext'; // 作成したContextを利用
 import { useFocusable } from '../hooks/useFocusable';
 
 const menuItems = [
@@ -23,14 +23,14 @@ const glowColors = {
 };
 
 const ThemeToggleButton = ({ theme, toggleTheme }) => {
-    const { focusedId } = useGamepad();
+    const { focusedId } = useGamepad(); // focusedIdをContextから取得
     const ref = useFocusable('theme-toggle-button');
     const isFocused = focusedId === 'theme-toggle-button';
     return (
         <div ref={ref} className="absolute bottom-8 right-8 z-50">
             <motion.button
                 onClick={toggleTheme}
-                className={`w-14 h-14 bg-slate-800/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-all duration-200 shadow-lg border border-white/10 ${isFocused ? 'ring-4 ring-purple-500 scale-110' : ''}`}
+                className={`w-14 h-14 bg-slate-800/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-all duration-200 shadow-lg border border-white/10 ${isFocused ? 'ring-4 ring-purple-500 scale-110' : ''}`} // isFocusedでスタイル変更
                 whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
             >
                 <AnimatePresence mode="wait">
@@ -59,16 +59,16 @@ const SmashThemeHome = ({ onNavigate }) => {
     }, [isSeEnabled, seVolume, assignments]);
 
     const SmashMenuItem = ({ item }) => {
-        const { focusedId } = useGamepad();
+        const { focusedId } = useGamepad(); // Contextから取得
         const ref = useFocusable(item.id);
         const isFocused = focusedId === item.id;
-        useEffect(() => { 
+        useEffect(() => {
             if (isFocused) {
                 setCursorVariant('hover');
-                playSound(hoverSoundRef, 'se_click'); 
+                playSound(hoverSoundRef, 'se_click');
             }
         }, [isFocused]);
-        
+
         return (
             <motion.div ref={ref} className={`relative group cursor-pointer text-white flex flex-col items-center justify-center p-4 shadow-xl transition-all duration-200 ${isFocused ? 'ring-4 ring-white ring-inset' : ''}`} style={{ backgroundColor: `${item.color}BF`, clipPath: 'polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%)' }} animate={{ scale: isFocused ? 1.05 : 1, zIndex: isFocused ? 10 : 1 }} onClick={() => onNavigate(item.id)} >
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-all duration-300"/>
@@ -92,7 +92,7 @@ const DarkThemeHome = ({ onNavigate }) => {
     const { isSeEnabled, seVolume } = settings;
     const [hoveredImage, setHoveredImage] = useState(defaultImage);
     const hoverSoundRef = useRef(null);
-    
+
     const playSound = useCallback((audioRef, actionType) => {
         const seId = assignments[actionType];
         if (isSeEnabled && audioRef.current && collectionItems[seId]) {
@@ -102,14 +102,14 @@ const DarkThemeHome = ({ onNavigate }) => {
             audioRef.current.play().catch(e => {});
         }
     }, [isSeEnabled, seVolume, assignments]);
-    
+
     const DarkMenuItem = ({ item }) => {
         const { title, subtitle, icon: Icon } = item;
-        const { focusedId } = useGamepad();
+        const { focusedId } = useGamepad(); // Contextから取得
         const ref = useFocusable(item.id);
         const isFocused = focusedId === item.id;
 
-        useEffect(() => { 
+        useEffect(() => {
             if(isFocused) {
                 setHoveredImage(item.image);
                 setCursorVariant('hover');
@@ -144,18 +144,18 @@ const DarkThemeHome = ({ onNavigate }) => {
 
 const HomeScreen = ({ onNavigate }) => {
     const { theme, toggleTheme } = useTheme();
-    const { focusedId } = useGamepad();
+    const { focusedId, focusableElements, setFocusedId } = useGamepad();
     const clickSoundRef = useRef(null);
     const { settings, assignments } = useAudioSettings();
     const { isSeEnabled, seVolume } = settings;
 
     useEffect(() => {
-        const handleGamepadConfirm = (e) => {
-            if (e.detail.buttonIndex === 0) { // Aボタン
+        const handleGamepadAction = (e) => {
+            if (e.detail.action === 'confirm' && focusedId) {
                 const audio = clickSoundRef.current;
                 const seId = assignments['se_click'];
-                
-                const action = () => {
+
+                const performAction = () => {
                     if (focusedId === 'theme-toggle-button') {
                         toggleTheme();
                     } else if (focusedId && menuItems.some(item => item.id === focusedId)) {
@@ -170,22 +170,29 @@ const HomeScreen = ({ onNavigate }) => {
                     const playPromise = audio.play();
                     if (playPromise !== undefined) {
                         playPromise.then(_ => {
-                            // 音声再生終了後にアクションを実行
-                            audio.onended = () => action();
+                            audio.onended = () => performAction();
                         }).catch(error => {
-                            // 再生が中断された場合などでもアクションを実行
-                            action();
+                            performAction();
                         });
                     }
                 } else {
-                    action(); // SEが無効なら即時アクション実行
+                    performAction();
                 }
             }
         };
 
-        window.addEventListener('gamepadbuttondown', handleGamepadConfirm);
-        return () => window.removeEventListener('gamepadbuttondown', handleGamepadConfirm);
-    }, [focusedId, onNavigate, toggleTheme, isSeEnabled, seVolume, assignments]);
+        // 初回フォーカスを設定
+        if (!focusedId && focusableElements.size > 0) {
+            const firstId = menuItems[0].id;
+            setFocusedId(firstId);
+        }
+
+        window.addEventListener('gamepadactiondown', handleGamepadAction);
+
+        return () => {
+            window.removeEventListener('gamepadactiondown', handleGamepadAction);
+        };
+    }, [focusedId, onNavigate, toggleTheme, isSeEnabled, seVolume, assignments, focusableElements, setFocusedId]);
 
     return (
       <div className="w-screen h-screen">

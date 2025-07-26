@@ -2,38 +2,38 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
-import { DataProvider } from './contexts/DataContext';
-import { SettingsProvider } from './contexts/SettingsContext';
-import { UIProvider } from './contexts/UIContext';
-import { ThemeProvider } from './contexts/ThemeContext';
-import { AudioSettingsProvider } from './contexts/AudioSettingsContext';
-import { PlayerStatsProvider } from './contexts/PlayerStatsContext';
-import { ModalProvider } from './contexts/ModalContext';
 import { AuthProvider } from './contexts/AuthContext';
-import { GamepadProvider } from './contexts/GamepadContext'; // ★ 新規インポート
+import { AudioSettingsProvider } from './contexts/AudioSettingsContext';
+import { DataProvider } from './contexts/DataContext';
+import { GamepadProvider } from './contexts/GamepadContext';
+import { ModalProvider } from './contexts/ModalContext';
+import { PlayerStatsProvider } from './contexts/PlayerStatsContext';
+import { SettingsProvider } from './contexts/SettingsContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { UIProvider } from './contexts/UIContext';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
+
 root.render(
   <React.StrictMode>
     <ThemeProvider>
-      <AudioSettingsProvider>
-        <PlayerStatsProvider>
-          <AuthProvider>
-            <SettingsProvider>
+      <AuthProvider>
+        <SettingsProvider>
+          <AudioSettingsProvider>
+            <UIProvider>
               <DataProvider>
-                <UIProvider>
-                  <ModalProvider>
-                    {/* ★ GamepadProviderでAppを囲む */}
-                    <GamepadProvider>
+                <PlayerStatsProvider>
+                  <GamepadProvider>
+                    <ModalProvider>
                       <App />
-                    </GamepadProvider>
-                  </ModalProvider>
-                </UIProvider>
+                    </ModalProvider>
+                  </GamepadProvider>
+                </PlayerStatsProvider>
               </DataProvider>
-            </SettingsProvider>
-          </AuthProvider>
-        </PlayerStatsProvider>
-      </AudioSettingsProvider>
+            </UIProvider>
+          </AudioSettingsProvider>
+        </SettingsProvider>
+      </AuthProvider>
     </ThemeProvider>
   </React.StrictMode>
 );

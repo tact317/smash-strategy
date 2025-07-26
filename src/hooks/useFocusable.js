@@ -2,20 +2,16 @@ import { useEffect, useRef } from 'react';
 import { useGamepad } from '../contexts/GamepadContext';
 
 export const useFocusable = (id) => {
-    const elementRef = useRef(null);
+    const ref = useRef(null);
     const { registerFocusable, unregisterFocusable } = useGamepad();
 
     useEffect(() => {
-        const element = elementRef.current;
+        const element = ref.current;
         if (element) {
             registerFocusable(id, element);
+            return () => unregisterFocusable(id);
         }
-        
-        // コンポーネントが消える時に登録を解除
-        return () => {
-            unregisterFocusable(id);
-        };
     }, [id, registerFocusable, unregisterFocusable]);
 
-    return elementRef;
+    return ref;
 };
